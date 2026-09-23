@@ -64,7 +64,7 @@ jobs:
 
       - name: Build Altair core
         working-directory: altair-plugin-flow
-        run: pnpm --filter @haneoka/altair build:core
+        run: pnpm --filter @haneoka/altair build:core && pnpm --filter @haneoka/altair-ui-react build
 
       - name: Check package
         working-directory: altair-plugin-flow

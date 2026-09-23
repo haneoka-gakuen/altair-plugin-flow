@@ -1,7 +1,4 @@
-import {
-  defineAltairPlugin,
-  type AltairFlowProviderContribution,
-} from "@haneoka/altair/plugins";
+import { defineAltairPlugin, type AltairFlowProviderContribution } from "@haneoka/altair/plugins";
 import { buildStoryFlowGraph } from "./flow.js";
 
 export * from "./flow.js";
@@ -27,9 +24,19 @@ export const altairFlowPlugin = defineAltairPlugin({
     version: "0.1.0",
     apiVersion: 2,
     description: "Canonical control-flow analysis for Altair story projects",
-    capabilities: ["flow"],
+    capabilities: ["flow", "panel"],
   },
   setup(context) {
+    context.contribute("panel", {
+      id: "flowchart",
+      name: "Flowchart",
+      slot: "workspace",
+      async mount(host, panelContext) {
+        const { mountFlowPanel } = await import("./panel.js");
+        panelContext.signal.throwIfAborted();
+        return mountFlowPanel(host, panelContext);
+      },
+    });
     context.contribute("flow", altairStoryFlowProvider, {
       singletonPort: ALTAIR_STORY_FLOW_PORT,
     });

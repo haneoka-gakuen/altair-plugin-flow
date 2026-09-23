@@ -1,14 +1,5 @@
-import {
-  VEGA_ADV_OPCODE,
-  VEGA_SYSTEM_OPCODE,
-  type VegaProject,
-} from "@haneoka/vega-protocol";
-import type {
-  JsonValue,
-  StoryProject,
-  StoryProjectCommand,
-  StoryScene,
-} from "@haneoka/altair/model";
+import { VEGA_ADV_OPCODE, VEGA_SYSTEM_OPCODE, type VegaProject } from "@haneoka/vega-protocol";
+import type { JsonValue, StoryProject, StoryProjectCommand, StoryScene } from "@haneoka/altair/model";
 import { summarizeFlowCommand } from "./command-summary.js";
 
 export const STORY_FLOW_EXTENSION_KEY = "altair:flow" as const;
@@ -67,6 +58,7 @@ export interface StoryFlowNode {
   readonly commandId?: string;
   readonly commandIndex?: number;
   readonly opcode?: number | null;
+  readonly commandType?: string;
   readonly sourceLine?: number;
   readonly condition?: string;
 }
@@ -225,10 +217,7 @@ const systemDirective = (command: StoryProjectCommand): StoryFlowDirective | und
     case VEGA_SYSTEM_OPCODE.JumpScene:
     case VEGA_SYSTEM_OPCODE.CallScene:
       return {
-        kind:
-          command.command === VEGA_SYSTEM_OPCODE.CallScene
-            ? "scene-call"
-            : "jump",
+        kind: command.command === VEGA_SYSTEM_OPCODE.CallScene ? "scene-call" : "jump",
         target: { sceneId: nonEmptyString(command.fields.sceneId) ?? "(empty)" },
         ...(condition ? { condition } : {}),
       };
@@ -336,16 +325,12 @@ const cloneFlowValue = <T>(value: T): T => {
     return value.map((entry) => cloneFlowValue(entry)) as T;
   }
   if (record(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, cloneFlowValue(entry)]),
-    ) as T;
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, cloneFlowValue(entry)])) as T;
   }
   return value;
 };
 
-const assertFlowProject: (
-  value: unknown,
-) => asserts value is StoryProject = (value) => {
+const assertFlowProject: (value: unknown) => asserts value is StoryProject = (value) => {
   if (!record(value) || value.version !== 2) {
     throw new TypeError("Unsupported Altair story project format");
   }
@@ -378,30 +363,21 @@ const assertFlowProject: (
     const commandIds = new Set<string>();
     for (const [commandIndex, commandValue] of sceneValue.commands.entries()) {
       if (!record(commandValue)) {
-        throw new TypeError(
-          `Altair command ${commandIndex} in scene '${sceneId}' must be an object`,
-        );
+        throw new TypeError(`Altair command ${commandIndex} in scene '${sceneId}' must be an object`);
       }
       const commandId = nonEmptyString(commandValue.id);
       if (!commandId) {
-        throw new TypeError(
-          `Altair command ${commandIndex} in scene '${sceneId}' must have an id`,
-        );
+        throw new TypeError(`Altair command ${commandIndex} in scene '${sceneId}' must have an id`);
       }
       if (commandIds.has(commandId)) {
-        throw new TypeError(
-          `Altair command id '${commandId}' is duplicated in scene '${sceneId}'`,
-        );
+        throw new TypeError(`Altair command id '${commandId}' is duplicated in scene '${sceneId}'`);
       }
       commandIds.add(commandId);
       if (
         commandValue.command !== null &&
-        (typeof commandValue.command !== "number" ||
-          !Number.isSafeInteger(commandValue.command))
+        (typeof commandValue.command !== "number" || !Number.isSafeInteger(commandValue.command))
       ) {
-        throw new TypeError(
-          `Altair command '${commandId}' in scene '${sceneId}' has an invalid opcode`,
-        );
+        throw new TypeError(`Altair command '${commandId}' in scene '${sceneId}' has an invalid opcode`);
       }
       if (!record(commandValue.fields) || !record(commandValue.extensions)) {
         throw new TypeError(
@@ -411,18 +387,13 @@ const assertFlowProject: (
     }
   }
   if (!sceneIds.has(entrySceneId)) {
-    throw new TypeError(
-      `Altair entry scene '${entrySceneId}' does not exist`,
-    );
+    throw new TypeError(`Altair entry scene '${entrySceneId}' does not exist`);
   }
 };
 
-const flowCommandLabel = (
-  command: StoryProjectCommand,
-  directive: StoryFlowDirective | undefined,
-): string => {
+const flowCommandLabel = (command: StoryProjectCommand, directive: StoryFlowDirective | undefined): string => {
   const label = nonEmptyString(command.fields.key);
-  if (label) return `Label · ${label}`;
+  if (label && !record(command.extensions.altairNode)) return `Label · ${label}`;
   if (directive?.kind === "scene-call") return `Call scene · ${targetSummary(directive.target)}`;
   if (directive?.kind === "scene-return") return "Return from scene";
   if (directive?.kind === "jump") return `Jump · ${targetSummary(directive.target)}`;
@@ -541,23 +512,24 @@ export const buildStoryFlowGraph = (project: StoryProject): StoryFlowGraph => {
     commandsByScene.set(scene.id, commands);
     for (const [commandIndex, command] of scene.commands.entries()) {
       const directive = inferredDirective(command);
-      const condition = directive?.kind === "condition" ? directive.expression : directive?.condition ?? conditionFromSource(command);
+      const condition =
+        directive?.kind === "condition" ? directive.expression : (directive?.condition ?? conditionFromSource(command));
       const kind: StoryFlowNodeKind =
         command.command === VEGA_SYSTEM_OPCODE.End
           ? "end"
           : command.command === VEGA_SYSTEM_OPCODE.SceneMarker
             ? "scene-marker"
             : directive?.kind === "scene-call"
-          ? "scene-call"
-          : directive?.kind === "scene-return"
-            ? "scene-return"
-            : directive?.kind === "jump" || command.command === VEGA_ADV_OPCODE.GoTo
-              ? "jump"
-              : command.command === VEGA_ADV_OPCODE.ChoiceShow
-                ? "choice"
-                : condition
-                  ? "condition"
-                  : "command";
+              ? "scene-call"
+              : directive?.kind === "scene-return"
+                ? "scene-return"
+                : directive?.kind === "jump" || command.command === VEGA_ADV_OPCODE.GoTo
+                  ? "jump"
+                  : command.command === VEGA_ADV_OPCODE.ChoiceShow
+                    ? "choice"
+                    : condition
+                      ? "condition"
+                      : "command";
       const id = commandNodeId(scene.id, command.id);
       addNode({
         id,
@@ -568,7 +540,7 @@ export const buildStoryFlowGraph = (project: StoryProject): StoryFlowGraph => {
         sceneName: scene.name,
         commandId: command.id,
         commandIndex,
-        opcode: command.command,
+        ...(typeof command.command === "string" ? { commandType: command.command } : { opcode: command.command }),
         ...(command.source?.line === undefined ? {} : { sourceLine: command.source.line }),
         ...(condition ? { condition } : {}),
       });
@@ -588,10 +560,7 @@ export const buildStoryFlowGraph = (project: StoryProject): StoryFlowGraph => {
           labels.set(label, id);
         }
       }
-      if (
-        Object.hasOwn(command.extensions, STORY_FLOW_EXTENSION_KEY) &&
-        !storyFlowDirective(command)
-      ) {
+      if (Object.hasOwn(command.extensions, STORY_FLOW_EXTENSION_KEY) && !storyFlowDirective(command)) {
         addDiagnostic({
           severity: "error",
           code: "flow.directive.invalid",
@@ -603,11 +572,7 @@ export const buildStoryFlowGraph = (project: StoryProject): StoryFlowGraph => {
     }
   }
 
-  const resolveScene = (
-    reference: string,
-    path: string,
-    sourceNodeId: string,
-  ): StoryScene | undefined => {
+  const resolveScene = (reference: string, path: string, sourceNodeId: string): StoryScene | undefined => {
     const exact = sceneById.get(reference);
     if (exact) return exact;
     const normalized = normalizeSceneReference(reference);
@@ -713,9 +678,7 @@ export const buildStoryFlowGraph = (project: StoryProject): StoryFlowGraph => {
   });
 
   for (const [sceneIndex, scene] of project.scenes.entries()) {
-    const firstNodeId = scene.commands[0]
-      ? commandNodeId(scene.id, scene.commands[0].id)
-      : sceneExitNodeId(scene.id);
+    const firstNodeId = scene.commands[0] ? commandNodeId(scene.id, scene.commands[0].id) : sceneExitNodeId(scene.id);
     addEdge({
       kind: "entry",
       from: sceneEntryNodeId(scene.id),
@@ -731,7 +694,7 @@ export const buildStoryFlowGraph = (project: StoryProject): StoryFlowGraph => {
       const directive = inferredDirective(command);
       const sourceCondition = conditionFromSource(command);
       const condition =
-        directive?.kind === "condition" ? directive.expression : directive?.condition ?? sourceCondition;
+        directive?.kind === "condition" ? directive.expression : (directive?.condition ?? sourceCondition);
       const branch = (outcome: boolean): StoryFlowConditionBranch | undefined =>
         condition ? { expression: condition, outcome } : undefined;
       const conditionalFallthrough = (): void => {
@@ -746,7 +709,12 @@ export const buildStoryFlowGraph = (project: StoryProject): StoryFlowGraph => {
       };
 
       if (directive?.kind === "scene-call") {
-        const target = resolveTarget(directive.target, scene.id, `${path}.extensions.${STORY_FLOW_EXTENSION_KEY}`, from);
+        const target = resolveTarget(
+          directive.target,
+          scene.id,
+          `${path}.extensions.${STORY_FLOW_EXTENSION_KEY}`,
+          from,
+        );
         addEdge({
           kind: "scene-call",
           from,
@@ -779,7 +747,12 @@ export const buildStoryFlowGraph = (project: StoryProject): StoryFlowGraph => {
       }
 
       if (directive?.kind === "jump") {
-        const target = resolveTarget(directive.target, scene.id, `${path}.extensions.${STORY_FLOW_EXTENSION_KEY}`, from);
+        const target = resolveTarget(
+          directive.target,
+          scene.id,
+          `${path}.extensions.${STORY_FLOW_EXTENSION_KEY}`,
+          from,
+        );
         addEdge({
           kind: "jump",
           from,
@@ -825,14 +798,8 @@ export const buildStoryFlowGraph = (project: StoryProject): StoryFlowGraph => {
         addEdge({
           kind: "exit",
           from,
-          to:
-            command.fields.returnIfCalled === true
-              ? sceneExitNodeId(scene.id)
-              : PROJECT_EXIT_NODE_ID,
-          label:
-            command.fields.returnIfCalled === true
-              ? "return if called"
-              : "end story",
+          to: command.fields.returnIfCalled === true ? sceneExitNodeId(scene.id) : PROJECT_EXIT_NODE_ID,
+          label: command.fields.returnIfCalled === true ? "return if called" : "end story",
           ...(branch(true) ? { condition: branch(true)! } : {}),
         });
         conditionalFallthrough();

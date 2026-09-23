@@ -1,11 +1,4 @@
-import {
-  access,
-  lstat,
-  readFile,
-  readdir,
-  realpath,
-  stat,
-} from "node:fs/promises";
+import { access, lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,16 +8,22 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 
 const policies = {
   "@haneoka/altair-plugin-flow": {
-    repository:
-      "git+https://github.com/haneoka-gakuen/altair-plugin-flow.git",
+    repository: "git+https://github.com/haneoka-gakuen/altair-plugin-flow.git",
     peerDependencies: ["@haneoka/altair", "@haneoka/vega-protocol"],
     allowedImports: [
       "@haneoka/altair/model",
       "@haneoka/altair/plugins",
+      "@haneoka/altair/documents",
       "@haneoka/vega-protocol",
+      "@haneoka/altair-ui-react",
+      "react",
+      "react/jsx-runtime",
+      "@dagrejs/dagre",
+      "@xyflow/react",
+      "@xyflow/react/dist/style.css",
     ],
-    forbiddenDependency:
-      /(?:live2d|cubism|motionsync|@esotericsoftware|spine|pixi)/iu,
+    uiDependencies: ["@haneoka/altair-ui-react", "@dagrejs/dagre", "@xyflow/react", "react", "react-dom"],
+    forbiddenDependency: /(?:live2d|cubism|motionsync|@esotericsoftware|spine|pixi)/iu,
     forbidMedia: true,
   },
 };
@@ -53,12 +52,7 @@ if (manifest.repository?.url !== policy.repository) {
 if (manifest.altair?.pluginApi !== 2) fail("altair.pluginApi must be 2");
 if (manifest.altair?.kind !== "flow") fail("altair.kind must be flow");
 
-const dependencySections = [
-  "dependencies",
-  "devDependencies",
-  "optionalDependencies",
-  "peerDependencies",
-];
+const dependencySections = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];
 for (const section of dependencySections) {
   for (const name of Object.keys(manifest[section] ?? {})) {
     if (policy.forbiddenDependency.test(name)) {
@@ -66,31 +60,23 @@ for (const section of dependencySections) {
     }
   }
 }
-if (Object.keys(manifest.dependencies ?? {}).length > 0) {
-  fail("runtime dependencies must be expressed as peer or host adapters");
+for (const dependency of Object.keys(manifest.dependencies ?? {})) {
+  if (!policy.uiDependencies.includes(dependency)) fail(`unexpected UI dependency ${dependency}`);
 }
 if (Object.keys(manifest.optionalDependencies ?? {}).length > 0) {
   fail("optional runtime dependencies are not allowed");
 }
-if (
-  Array.isArray(manifest.bundledDependencies) &&
-  manifest.bundledDependencies.length > 0
-) {
+if (Array.isArray(manifest.bundledDependencies) && manifest.bundledDependencies.length > 0) {
   fail("bundled dependencies are not allowed");
 }
-if (
-  Array.isArray(manifest.bundleDependencies) &&
-  manifest.bundleDependencies.length > 0
-) {
+if (Array.isArray(manifest.bundleDependencies) && manifest.bundleDependencies.length > 0) {
   fail("bundleDependencies are not allowed");
 }
 
 const actualPeers = Object.keys(manifest.peerDependencies ?? {}).sort();
 const expectedPeers = [...policy.peerDependencies].sort();
 if (JSON.stringify(actualPeers) !== JSON.stringify(expectedPeers)) {
-  fail(
-    `peer dependencies must be exactly ${expectedPeers.join(", ") || "(none)"}`,
-  );
+  fail(`peer dependencies must be exactly ${expectedPeers.join(", ") || "(none)"}`);
 }
 
 const collectTargets = (value) => {
@@ -102,12 +88,7 @@ const collectTargets = (value) => {
 };
 
 const targets = new Set(
-  [
-    manifest.main,
-    manifest.module,
-    manifest.types,
-    ...collectTargets(manifest.exports),
-  ].filter(
+  [manifest.main, manifest.module, manifest.types, ...collectTargets(manifest.exports)].filter(
     (value) => typeof value === "string" && value.startsWith("./dist/"),
   ),
 );
@@ -131,9 +112,7 @@ const insideRoot = (path) => {
   const pathFromRoot = relative(root, path);
   return (
     pathFromRoot === "" ||
-    (!pathFromRoot.startsWith(`..${sep}`) &&
-      pathFromRoot !== ".." &&
-      !pathFromRoot.startsWith(sep))
+    (!pathFromRoot.startsWith(`..${sep}`) && pathFromRoot !== ".." && !pathFromRoot.startsWith(sep))
   );
 };
 
@@ -144,10 +123,7 @@ const walkRepository = async (path, relativePath = "") => {
   if (info.isDirectory()) {
     for (const entry of await readdir(path)) {
       if (!relativePath && ignoredRoots.has(entry)) continue;
-      await walkRepository(
-        resolve(path, entry),
-        relativePath ? `${relativePath}/${entry}` : entry,
-      );
+      await walkRepository(resolve(path, entry), relativePath ? `${relativePath}/${entry}` : entry);
     }
     return;
   }
@@ -156,14 +132,10 @@ const walkRepository = async (path, relativePath = "") => {
 
 await walkRepository(root);
 const restrictedRepositoryFiles = repositoryFiles.filter(
-  (path) =>
-    commonRestrictedPath.test(path) ||
-    (policy.forbidMedia && mediaPath.test(path)),
+  (path) => commonRestrictedPath.test(path) || (policy.forbidMedia && mediaPath.test(path)),
 );
 if (restrictedRepositoryFiles.length > 0) {
-  fail(
-    `restricted SDK, runtime, model, or asset payload:\n${restrictedRepositoryFiles.join("\n")}`,
-  );
+  fail(`restricted SDK, runtime, model, or asset payload:\n${restrictedRepositoryFiles.join("\n")}`);
 }
 
 const publishableFiles = [];
@@ -178,10 +150,7 @@ const walkPublishable = async (path, relativePath) => {
   if (info.isSymbolicLink()) fail(`publish path is a symbolic link: ${relativePath}`);
   if (info.isDirectory()) {
     for (const entry of await readdir(path)) {
-      await walkPublishable(
-        resolve(path, entry),
-        relativePath ? `${relativePath}/${entry}` : entry,
-      );
+      await walkPublishable(resolve(path, entry), relativePath ? `${relativePath}/${entry}` : entry);
     }
     return;
   }
@@ -201,21 +170,16 @@ for (const entry of manifest.files ?? []) {
 }
 
 const restrictedPublishableFiles = publishableFiles.filter(
-  (path) =>
-    commonRestrictedPath.test(path) ||
-    (policy.forbidMedia && mediaPath.test(path)),
+  (path) => commonRestrictedPath.test(path) || (policy.forbidMedia && mediaPath.test(path)),
 );
 if (restrictedPublishableFiles.length > 0) {
-  fail(
-    `restricted publish payload:\n${restrictedPublishableFiles.join("\n")}`,
-  );
+  fail(`restricted publish payload:\n${restrictedPublishableFiles.join("\n")}`);
 }
 if (publishableBytes > 5 * 1024 * 1024) {
   fail(`publish payload is unexpectedly large (${publishableBytes} bytes)`);
 }
 
-const importPattern =
-  /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)["']([^"']+)["']/gu;
+const importPattern = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)["']([^"']+)["']/gu;
 const builtJavaScript = (
   await Promise.all(
     publishableFiles
@@ -228,9 +192,7 @@ const externalImports = new Set(
     .map((match) => match[1])
     .filter((specifier) => specifier && !specifier.startsWith(".")),
 );
-const unexpectedImports = [...externalImports].filter(
-  (specifier) => !policy.allowedImports.includes(specifier),
-);
+const unexpectedImports = [...externalImports].filter((specifier) => !policy.allowedImports.includes(specifier));
 if (unexpectedImports.length > 0) {
   fail(`unexpected runtime imports: ${unexpectedImports.join(", ")}`);
 }
