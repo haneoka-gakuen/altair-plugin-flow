@@ -56,6 +56,8 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: node scripts/verify-release-tag.mjs
+      - name: Set up locked Vega Rust and WASM tools
+        uses: ./altair-plugin-flow/.dependencies/vega/.github/actions/setup-wasm
 
       - name: Install dependencies
         working-directory: altair-plugin-flow
