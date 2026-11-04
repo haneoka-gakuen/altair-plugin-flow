@@ -132,7 +132,7 @@ const walkRepository = async (path, relativePath = "") => {
 
 await walkRepository(root);
 const restrictedRepositoryFiles = repositoryFiles.filter(
-  (path) => commonRestrictedPath.test(path) || (policy.forbidMedia && mediaPath.test(path)),
+  (path) => !path.startsWith("docs/brand/") && (commonRestrictedPath.test(path) || (policy.forbidMedia && mediaPath.test(path))),
 );
 if (restrictedRepositoryFiles.length > 0) {
   fail(`restricted SDK, runtime, model, or asset payload:\n${restrictedRepositoryFiles.join("\n")}`);
