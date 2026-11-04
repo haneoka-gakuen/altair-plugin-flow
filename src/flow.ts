@@ -1,4 +1,4 @@
-import { VEGA_ADV_OPCODE, VEGA_SYSTEM_OPCODE, type VegaProject } from "@haneoka/vega-protocol";
+import { VEGA_ADV_OPCODE, VEGA_SYSTEM_OPCODE, isVegaCommandType, type VegaProject } from "@haneoka/vega-protocol";
 import type { JsonValue, StoryProject, StoryProjectCommand, StoryScene } from "@haneoka/altair/model";
 import { summarizeFlowCommand } from "./command-summary.js";
 
@@ -375,6 +375,7 @@ const assertFlowProject: (value: unknown) => asserts value is StoryProject = (va
       commandIds.add(commandId);
       if (
         commandValue.command !== null &&
+        !isVegaCommandType(commandValue.command) &&
         (typeof commandValue.command !== "number" || !Number.isSafeInteger(commandValue.command))
       ) {
         throw new TypeError(`Altair command '${commandId}' in scene '${sceneId}' has an invalid opcode`);

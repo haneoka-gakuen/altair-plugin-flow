@@ -1,12 +1,57 @@
 import { useMemo, useSyncExternalStore } from "react";
-import { mountReactEditor, useEditorWorkspace, useEditorTranslator } from "@haneoka/altair-ui-react";
+import {
+  mountReactEditor,
+  useEditorWorkspace,
+  useEditorTranslator,
+  ZoomIn,
+  ZoomOut,
+  Maximize,
+} from "@haneoka/altair-ui-react";
 import { authoredNodeLines, parseAltairSceneDocument, type AltairPanelContext } from "@haneoka/altair/documents";
 import { FLOW_PANEL_CSS } from "./styles.js";
-import { ReactFlow, Background, Controls, MiniMap, MarkerType } from "@xyflow/react";
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  ControlButton,
+  MiniMap,
+  MarkerType,
+  useReactFlow,
+  useStore,
+} from "@xyflow/react";
 import { buildStoryFlowGraph } from "./flow.js";
 import type { StoryProject } from "@haneoka/altair/documents";
 import dagre from "@dagrejs/dagre";
 import "@xyflow/react/dist/style.css";
+function FlowControls() {
+  const tr = useEditorTranslator();
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const atMinimum = useStore((state) => state.transform[2] <= state.minZoom);
+  const atMaximum = useStore((state) => state.transform[2] >= state.maxZoom);
+  return (
+    <Controls showZoom={false} showFitView={false} showInteractive={false}>
+      <ControlButton
+        title={tr("Zoom in")}
+        aria-label={tr("Zoom in")}
+        disabled={atMaximum}
+        onClick={() => void zoomIn()}
+      >
+        <ZoomIn />
+      </ControlButton>
+      <ControlButton
+        title={tr("Zoom out")}
+        aria-label={tr("Zoom out")}
+        disabled={atMinimum}
+        onClick={() => void zoomOut()}
+      >
+        <ZoomOut />
+      </ControlButton>
+      <ControlButton title={tr("Fit to view")} aria-label={tr("Fit to view")} onClick={() => void fitView()}>
+        <Maximize />
+      </ControlButton>
+    </Controls>
+  );
+}
 export function StoryGraph({
   project,
   onSelect,
@@ -75,7 +120,7 @@ export function StoryGraph({
         target: edge.to,
         label: edge.label ? tr(edge.label) : undefined,
         type: "smoothstep",
-        markerEnd: { type: MarkerType.ArrowClosed },
+        markerEnd: { type: MarkerType.ArrowClosed, color: "var(--md-sys-color-outline)" },
       })),
     };
   }, [project, tr]);
@@ -110,9 +155,14 @@ export function StoryGraph({
         }
       }}
     >
-      <Background gap={20} />
-      <Controls showInteractive={false} />
-      <MiniMap pannable zoomable />
+      <Background gap={20} color="var(--md-sys-color-outline-variant)" />
+      <FlowControls />
+      <MiniMap
+        pannable
+        zoomable
+        nodeColor="var(--md-sys-color-outline-variant)"
+        maskColor="color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent)"
+      />
     </ReactFlow>
   );
 }
