@@ -6,6 +6,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize,
+  authoredTypeLabelKey,
 } from "@haneoka/altair-ui-react";
 import { authoredNodeLines, parseAltairSceneDocument, type AltairPanelContext } from "@haneoka/altair/documents";
 import { FLOW_PANEL_CSS } from "./styles.js";
@@ -80,13 +81,29 @@ export function StoryGraph({
       const authored = command.extensions.altairNode;
       const type = authored && typeof authored === "object" && !Array.isArray(authored) ? authored.type : undefined;
       let name: string | undefined;
+      let plugin: string | undefined;
       if (typeof type === "string" && type.includes(":")) {
         try {
           name = decodeURIComponent(type.slice(type.indexOf(":") + 1));
+          plugin = decodeURIComponent(type.slice(0, type.indexOf(":")));
         } catch {}
       }
-      const title = name ? tr(`command.${name}`, { defaultValue: name }) : node.label;
-      const value = command.fields.text;
+      const key = name && plugin ? authoredTypeLabelKey(plugin, name) : undefined;
+      const title = name ? tr(`command.${name}`, { defaultValue: tr(key ?? name) }) : node.label;
+      const value = [
+        "text",
+        "name",
+        "targetName",
+        "backgroundRef",
+        "live2dKey",
+        "bgmRef",
+        "seRef",
+        "motionName",
+        "expressionName",
+        "sceneId",
+      ]
+        .map((key) => command.fields[key])
+        .find((value) => value !== undefined && value !== "");
       const summary =
         typeof value === "string"
           ? value
@@ -129,6 +146,17 @@ export function StoryGraph({
       nodes={nodes}
       edges={edges}
       fitView
+      fitViewOptions={{
+        nodes: graph.nodes
+          .filter(
+            (node) =>
+              node.id === graph.entryNodeId ||
+              (node.sceneId === project.entrySceneId && (node.kind === "scene-entry" || node.commandIndex === 0)),
+          )
+          .map((node) => ({ id: node.id })),
+        maxZoom: 1,
+        padding: 0.3,
+      }}
       minZoom={0.15}
       zoomOnDoubleClick={false}
       ariaLabelConfig={{
@@ -175,8 +203,10 @@ function FlowPanel() {
     for (const document of workspace.getSnapshot().documents) {
       if (!/\.scene\.ya?ml$/iu.test(document.path)) continue;
       try {
-        if (parseAltairSceneDocument(document.text).id !== sceneId) continue;
-        const targetLine = nodeId ? (authoredNodeLines(document.text).get(nodeId) ?? line) : line;
+        const scene = parseAltairSceneDocument(document.text);
+        if (scene.id !== sceneId) continue;
+        const targetId = nodeId ?? scene.nodes[0]?.id;
+        const targetLine = targetId ? (authoredNodeLines(document.text).get(targetId) ?? line) : line;
         workspace.activate(document.path, targetLine);
         workspace.select(targetLine);
         workspace.setView("visual");

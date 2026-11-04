@@ -30,7 +30,7 @@ jobs:
           repository: haneoka-gakuen/altair
           path: altair-plugin-flow/.dependencies/altair
           persist-credentials: false
-          ref: c826e9ac3a244325e0c7871f985d4f3b40c590f8
+          ref: bf48470a1b22ea76f1d3ea7b914a3399467907a9
 
       - name: Check out Vega
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
