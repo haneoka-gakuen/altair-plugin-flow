@@ -982,7 +982,7 @@ export const buildStoryFlowGraph = (project: StoryProject): StoryFlowGraph => {
  * condition, or preserved-source directives and therefore fails explicitly.
  */
 export const buildVegaProjectFlowGraph = (project: VegaProject): StoryFlowGraph => {
-  if (project.format !== "vega-project" || project.formatVersion !== 1) {
+  if (project.format !== "vega-project" || (project.formatVersion !== 1 && project.formatVersion !== 2)) {
     throw new TypeError("Unsupported Vega project format");
   }
   const source = project.metadata?.["altair:authoringSource"];
